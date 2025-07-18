@@ -1,14 +1,11 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Dashboard } from "./Dashboard";
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  // In a real app, you would get this from your auth context/state
+  const userRole = "cpmi"; // Change this to test different roles: "superadmin", "admin", "pengajar", "cpmi"
+  const userName = "Ahmad Fauzi";
+
+  return <Dashboard userRole={userRole as any} userName={userName} />;
 };
 
 export default Index;

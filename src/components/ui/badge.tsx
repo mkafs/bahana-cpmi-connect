@@ -15,6 +15,19 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        success:
+          "border-transparent bg-success text-success-foreground hover:bg-success/80",
+        warning:
+          "border-transparent bg-warning text-warning-foreground hover:bg-warning/80",
+        // Role-specific badges
+        superadmin:
+          "border-transparent bg-superadmin text-superadmin-foreground hover:bg-superadmin/80",
+        admin:
+          "border-transparent bg-admin text-admin-foreground hover:bg-admin/80",
+        pengajar:
+          "border-transparent bg-pengajar text-pengajar-foreground hover:bg-pengajar/80",
+        cpmi:
+          "border-transparent bg-cpmi text-cpmi-foreground hover:bg-cpmi/80",
       },
     },
     defaultVariants: {

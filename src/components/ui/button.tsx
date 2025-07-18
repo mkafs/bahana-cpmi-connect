@@ -9,15 +9,23 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary-hover shadow-soft",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-soft",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+          "border border-input bg-background hover:bg-accent hover:text-accent-foreground shadow-soft",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-soft",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        // Role-specific variants
+        superadmin: "bg-superadmin text-superadmin-foreground hover:bg-superadmin/90 shadow-primary",
+        admin: "bg-admin text-admin-foreground hover:bg-admin/90 shadow-soft",
+        pengajar: "bg-pengajar text-pengajar-foreground hover:bg-pengajar/90 shadow-soft",
+        cpmi: "bg-cpmi text-cpmi-foreground hover:bg-cpmi/90 shadow-soft",
+        // Status variants
+        success: "bg-success text-success-foreground hover:bg-success/90 shadow-soft",
+        warning: "bg-warning text-warning-foreground hover:bg-warning/90 shadow-soft",
       },
       size: {
         default: "h-10 px-4 py-2",
