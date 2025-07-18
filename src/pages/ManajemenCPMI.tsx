@@ -200,8 +200,11 @@ export function ManajemenCPMI({ userRole = "admin", userName = "User" }: Manajem
                 />
               </div>
               <FilterBar 
-                options={filterOptions}
-                onFilterChange={(filters) => console.log('Filters:', filters)}
+                onFiltersChange={(filters) => console.log('Filters:', filters)}
+                showKelasFilter={true}
+                showStatusFilter={true}
+                showDateFilter={false}
+                placeholder="Cari CPMI berdasarkan nama, email, atau phone..."
               />
             </div>
           </CardContent>
