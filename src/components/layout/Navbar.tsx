@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Bell, Menu, Search, LogOut, User } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,6 +45,13 @@ const getRoleLabel = (role: UserRole) => {
 
 export function Navbar({ userRole = "cpmi", userName = "User", onMenuToggle, notificationCount = 0 }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -122,7 +131,7 @@ export function Navbar({ userRole = "cpmi", userName = "User", onMenuToggle, not
                 <span>Profil</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Keluar</span>
               </DropdownMenuItem>

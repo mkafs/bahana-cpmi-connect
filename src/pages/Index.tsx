@@ -1,11 +1,14 @@
 import { Dashboard } from "./Dashboard";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
-  // In a real app, you would get this from your auth context/state
-  const userRole = "cpmi"; // Change this to test different roles: "superadmin", "admin", "pengajar", "cpmi"
-  const userName = "Ahmad Fauzi";
+  const { profile } = useAuth();
 
-  return <Dashboard userRole={userRole as any} userName={userName} />;
+  if (!profile) {
+    return null; // This should not happen due to ProtectedRoute
+  }
+
+  return <Dashboard userRole={profile.role} userName={profile.name} />;
 };
 
 export default Index;

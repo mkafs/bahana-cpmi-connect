@@ -1,172 +1,346 @@
+import { useState, useEffect } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Clock, Users } from "lucide-react";
-import type { UserRole } from "@/types/auth";
+import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { MapPin, Clock, CheckCircle, XCircle, AlertCircle, Users } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
-interface AbsensiProps {
-  userRole?: UserRole;
-  userName?: string;
+interface ClassSubject {
+  id: string;
+  subject: {
+    name: string;
+    code: string;
+  };
+  pengajar: {
+    name: string;
+  };
+  schedule_day: number;
+  schedule_time: string;
+  class: {
+    name: string;
+  };
 }
 
-export function Absensi({ userRole = "cpmi", userName = "User" }: AbsensiProps) {
-  const currentDate = new Date().toLocaleDateString('id-ID', {
-    weekday: 'long',
-    year: 'numeric', 
-    month: 'long',
-    day: 'numeric'
-  });
+interface AttendanceRecord {
+  id: string;
+  date: string;
+  status: string;
+  notes?: string;
+  class_subject: {
+    id: string;
+    schedule_time: string;
+    subject: { name: string; code: string };
+    pengajar: { name: string };
+    class: { name: string };
+  };
+}
 
-  const currentTime = new Date().toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+export function Absensi() {
+  const { profile } = useAuth();
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [todaySchedule, setTodaySchedule] = useState<ClassSubject[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [notes, setNotes] = useState("");
 
-  const attendanceData = [
-    { date: "2024-01-15", status: "Hadir", time: "07:45", location: "Ruang Kelas A" },
-    { date: "2024-01-14", status: "Hadir", time: "07:30", location: "Ruang Kelas A" },
-    { date: "2024-01-13", status: "Terlambat", time: "08:15", location: "Ruang Kelas A" },
-    { date: "2024-01-12", status: "Hadir", time: "07:40", location: "Ruang Kelas A" },
-    { date: "2024-01-11", status: "Izin", time: "-", location: "-" },
-  ];
+  useEffect(() => {
+    if (profile?.role === 'cpmi') {
+      fetchTodaySchedule();
+      fetchAttendanceRecords();
+    }
+  }, [profile, selectedDate]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Hadir":
-        return <Badge className="bg-green-100 text-green-800">Hadir</Badge>;
-      case "Terlambat":
-        return <Badge className="bg-yellow-100 text-yellow-800">Terlambat</Badge>;
-      case "Izin":
-        return <Badge className="bg-blue-100 text-blue-800">Izin</Badge>;
-      case "Alpha":
-        return <Badge className="bg-red-100 text-red-800">Alpha</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+  const fetchTodaySchedule = async () => {
+    try {
+      const dayOfWeek = selectedDate.getDay() || 7; // Convert Sunday (0) to 7
+      
+      // First get CPMI data to find class_id
+      const { data: cpmiData } = await supabase
+        .from('cpmi')
+        .select('class_id')
+        .eq('user_id', profile?.id)
+        .single();
+
+      if (!cpmiData?.class_id) return;
+
+      const { data, error } = await supabase
+        .from('class_subjects')
+        .select(`
+          id,
+          schedule_day,
+          schedule_time,
+          subject:subjects(name, code),
+          pengajar:profiles!class_subjects_pengajar_id_fkey(name),
+          class:classes(name)
+        `)
+        .eq('class_id', cpmiData.class_id)
+        .eq('schedule_day', dayOfWeek)
+        .order('schedule_time');
+
+      if (error) throw error;
+      setTodaySchedule(data || []);
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
     }
   };
 
+  const fetchAttendanceRecords = async () => {
+    try {
+      // Get CPMI ID first
+      const { data: cpmiData } = await supabase
+        .from('cpmi')
+        .select('id')
+        .eq('user_id', profile?.id)
+        .single();
+
+      if (!cpmiData?.id) return;
+
+      const { data, error } = await supabase
+        .from('attendance')
+        .select(`
+          id,
+          date,
+          status,
+          notes,
+          class_subject:class_subjects(
+            id,
+            schedule_time,
+            subject:subjects(name, code),
+            pengajar:profiles!class_subjects_pengajar_id_fkey(name),
+            class:classes(name)
+          )
+        `)
+        .eq('cpmi_id', cpmiData.id)
+        .eq('date', selectedDate.toISOString().split('T')[0])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAttendanceRecords(data || []);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+    }
+  };
+
+  const handleAttendance = async (classSubjectId: string) => {
+    if (!selectedStatus) {
+      toast({
+        title: "Error",
+        description: "Pilih status kehadiran terlebih dahulu",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get CPMI ID
+      const { data: cpmiData } = await supabase
+        .from('cpmi')
+        .select('id')
+        .eq('user_id', profile?.id)
+        .single();
+
+      if (!cpmiData?.id) throw new Error('CPMI data not found');
+
+      const { error } = await supabase
+        .from('attendance')
+        .upsert({
+          cpmi_id: cpmiData.id,
+          class_subject_id: classSubjectId,
+          date: selectedDate.toISOString().split('T')[0],
+          status: selectedStatus as "hadir" | "tidak_hadir" | "terlambat" | "izin" | "sakit",
+          notes: notes || null
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Berhasil",
+        description: "Absensi berhasil dicatat",
+      });
+
+      // Refresh data
+      fetchAttendanceRecords();
+      setSelectedStatus("");
+      setNotes("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'hadir':
+        return <CheckCircle className="h-4 w-4 text-success" />;
+      case 'tidak_hadir':
+        return <XCircle className="h-4 w-4 text-destructive" />;
+      case 'terlambat':
+        return <Clock className="h-4 w-4 text-warning" />;
+      case 'izin':
+        return <AlertCircle className="h-4 w-4 text-info" />;
+      case 'sakit':
+        return <AlertCircle className="h-4 w-4 text-secondary" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      hadir: 'success',
+      tidak_hadir: 'destructive',
+      terlambat: 'warning',
+      izin: 'default',
+      sakit: 'secondary'
+    };
+    return <Badge variant={variants[status as keyof typeof variants] as any}>{status.replace('_', ' ').toUpperCase()}</Badge>;
+  };
+
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
+  const currentTime = new Date().toTimeString().slice(0, 5);
+
   return (
-    <MainLayout userRole={userRole} userName={userName}>
+    <MainLayout userRole={profile?.role} userName={profile?.name}>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Absensi</h1>
-            <p className="text-muted-foreground">Kelola absensi harian Anda</p>
+        <div>
+          <h1 className="text-2xl font-bold">Absensi</h1>
+          <p className="text-muted-foreground">Kelola kehadiran Anda dalam pembelajaran</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pilih Tanggal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                className="rounded-md border"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Schedule & Attendance */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Today's Schedule */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Jadwal {isToday ? 'Hari Ini' : selectedDate.toLocaleDateString('id-ID')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {todaySchedule.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Tidak ada jadwal untuk tanggal ini
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {todaySchedule.map((schedule) => {
+                      const attendanceRecord = attendanceRecords.find(
+                        record => record.class_subject.id === schedule.id
+                      );
+                      const isPastTime = isToday && currentTime > schedule.schedule_time;
+                      const canAttend = isToday && !attendanceRecord;
+
+                      return (
+                        <div key={schedule.id} className="border rounded-lg p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-semibold">{schedule.subject.name}</h3>
+                                <Badge variant="outline">{schedule.subject.code}</Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-1">
+                                Pengajar: {schedule.pengajar.name}
+                              </p>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span>{schedule.schedule_time}</span>
+                                <MapPin className="h-4 w-4 ml-2" />
+                                <span>{schedule.class.name}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="text-right">
+                              {attendanceRecord ? (
+                                <div className="flex items-center gap-2">
+                                  {getStatusIcon(attendanceRecord.status)}
+                                  {getStatusBadge(attendanceRecord.status)}
+                                </div>
+                              ) : canAttend ? (
+                                <div className="space-y-2">
+                                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                                    <SelectTrigger className="w-40">
+                                      <SelectValue placeholder="Pilih status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="hadir">Hadir</SelectItem>
+                                      <SelectItem value="terlambat">Terlambat</SelectItem>
+                                      <SelectItem value="izin">Izin</SelectItem>
+                                      <SelectItem value="sakit">Sakit</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {selectedStatus && (
+                                    <div className="space-y-2">
+                                      <Textarea
+                                        placeholder="Catatan (opsional)"
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        className="w-40 h-20"
+                                      />
+                                      <Button
+                                        onClick={() => handleAttendance(schedule.id)}
+                                        disabled={loading}
+                                        size="sm"
+                                        className="w-40"
+                                      >
+                                        Catat Absensi
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : isPastTime ? (
+                                <Badge variant="secondary">Terlewat</Badge>
+                              ) : (
+                                <Badge variant="outline">Belum Dimulai</Badge>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {attendanceRecord?.notes && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-sm text-muted-foreground">
+                                <strong>Catatan:</strong> {attendanceRecord.notes}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
-
-        {/* Check-in Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Absen Hari Ini
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Tanggal</p>
-                <p className="font-medium">{currentDate}</p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Waktu Sekarang</p>
-                <p className="font-medium">{currentTime}</p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Status</p>
-                <Badge className="bg-gray-100 text-gray-800">Belum Absen</Badge>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Absen Masuk
-              </Button>
-              <Button variant="outline" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Absen Keluar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Hadir</p>
-                  <p className="text-2xl font-bold text-green-600">18</p>
-                </div>
-                <Users className="h-8 w-8 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Terlambat</p>
-                  <p className="text-2xl font-bold text-yellow-600">2</p>
-                </div>
-                <Clock className="h-8 w-8 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Izin</p>
-                  <p className="text-2xl font-bold text-blue-600">1</p>
-                </div>
-                <Calendar className="h-8 w-8 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Alpha</p>
-                  <p className="text-2xl font-bold text-red-600">0</p>
-                </div>
-                <Users className="h-8 w-8 text-red-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Attendance History */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Riwayat Absensi</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {attendanceData.map((record, index) => (
-                <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="font-medium">{new Date(record.date).toLocaleDateString('id-ID')}</p>
-                      <p className="text-sm text-muted-foreground">{record.location}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <p className="font-medium">{record.time}</p>
-                      <p className="text-sm text-muted-foreground">Waktu Absen</p>
-                    </div>
-                    {getStatusBadge(record.status)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </MainLayout>
   );
