@@ -25,6 +25,7 @@ interface SidebarProps {
   userRole?: UserRole;
   isCollapsed?: boolean;
   onToggle?: () => void;
+  cpmiStatus?: 'aktif' | 'piket' | 'sudah_terbang' | null;
 }
 
 interface MenuItem {
@@ -99,12 +100,36 @@ const menuItems: MenuItem[] = [
   }
 ];
 
-export function Sidebar({ userRole = "cpmi", isCollapsed = false, onToggle }: SidebarProps) {
+export function Sidebar({ userRole = "cpmi", isCollapsed = false, onToggle, cpmiStatus }: SidebarProps) {
   const location = useLocation();
   
-  const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(userRole)
-  );
+  const getFilteredMenuItems = () => {
+    let filteredItems = menuItems.filter(item => item.roles.includes(userRole));
+    
+    // Filter based on CPMI status
+    if (userRole === "cpmi" && cpmiStatus) {
+      if (cpmiStatus === "aktif") {
+        // Active CPMI can see absensi but not piket
+        filteredItems = filteredItems.filter(item => 
+          item.href !== "/piket"
+        );
+      } else if (cpmiStatus === "piket") {
+        // Piket CPMI can see piket but not absensi
+        filteredItems = filteredItems.filter(item => 
+          item.href !== "/absensi"
+        );
+      } else if (cpmiStatus === "sudah_terbang") {
+        // Graduated CPMI has read-only access
+        filteredItems = filteredItems.filter(item => 
+          item.href === "/" || item.href === "/pelajaran" || item.href === "/pesan"
+        );
+      }
+    }
+    
+    return filteredItems;
+  };
+
+  const filteredMenuItems = getFilteredMenuItems();
 
   const isActive = (href: string) => {
     if (href === "/") {

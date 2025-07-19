@@ -7,9 +7,10 @@ interface MainLayoutProps {
   children: React.ReactNode;
   userRole?: UserRole;
   userName?: string;
+  cpmiStatus?: 'aktif' | 'piket' | 'sudah_terbang' | null;
 }
 
-export function MainLayout({ children, userRole = "cpmi", userName = "User" }: MainLayoutProps) {
+export function MainLayout({ children, userRole = "cpmi", userName = "User", cpmiStatus }: MainLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -29,6 +30,7 @@ export function MainLayout({ children, userRole = "cpmi", userName = "User" }: M
           userRole={userRole} 
           isCollapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
+          cpmiStatus={cpmiStatus}
         />
       </div>
 
@@ -45,7 +47,7 @@ export function MainLayout({ children, userRole = "cpmi", userName = "User" }: M
         fixed left-0 top-0 h-full w-64 bg-background border-r z-50 transition-transform lg:hidden
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <Sidebar userRole={userRole} />
+        <Sidebar userRole={userRole} cpmiStatus={cpmiStatus} />
       </div>
 
       {/* Main Content */}

@@ -18,9 +18,21 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { UserRole } from "@/types/auth";
 
+interface CPMIData {
+  id: string;
+  status: 'aktif' | 'piket' | 'sudah_terbang';
+  class_id?: string;
+  no_peserta?: string;
+  tanggal_masuk?: string;
+  tanggal_terbang?: string;
+  alamat?: string;
+  user_id: string;
+}
+
 interface DashboardProps {
   userRole?: UserRole;
   userName?: string;
+  cpmiData?: CPMIData | null;
 }
 
 // Mock data - replace with real data from your API
@@ -105,9 +117,39 @@ const todaySchedule = [
   },
 ];
 
-export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardProps) {
+export function Dashboard({ userRole = "cpmi", userName = "User", cpmiData }: DashboardProps) {
   const [filters, setFilters] = useState({});
-  const stats = mockStats[userRole] || mockStats.cpmi;
+  
+  // Dynamic stats based on CPMI status
+  const getCPMIStats = () => {
+    if (userRole === "cpmi" && cpmiData) {
+      if (cpmiData.status === "aktif") {
+        return [
+          { title: "Kehadiran Bulan Ini", value: "18/20", icon: UserCheck, variant: "success" as const },
+          { title: "Pelajaran Hari Ini", value: 3, icon: BookOpen, variant: "default" as const },
+          { title: "Status", value: "Aktif Belajar", icon: UserCheck, variant: "success" as const },
+          { title: "Pesan Baru", value: 2, icon: Calendar, variant: "default" as const }
+        ];
+      } else if (cpmiData.status === "piket") {
+        return [
+          { title: "Kehadiran Bulan Ini", value: "18/20", icon: UserCheck, variant: "success" as const },
+          { title: "Status", value: "Tugas Piket", icon: ClipboardList, variant: "default" as const },
+          { title: "Shift Piket", value: "Pagi", icon: Clock, variant: "default" as const },
+          { title: "Laporan Piket", value: 3, icon: ClipboardList, variant: "default" as const }
+        ];
+      } else if (cpmiData.status === "sudah_terbang") {
+        return [
+          { title: "Total Kehadiran", value: "20/20", icon: UserCheck, variant: "success" as const },
+          { title: "Status", value: "Sudah Terbang", icon: TrendingUp, variant: "success" as const },
+          { title: "Tanggal Terbang", value: cpmiData.tanggal_terbang || "-", icon: Calendar, variant: "default" as const },
+          { title: "Program Selesai", value: "100%", icon: BookOpen, variant: "success" as const }
+        ];
+      }
+    }
+    return mockStats[userRole] || mockStats.cpmi;
+  };
+
+  const stats = getCPMIStats();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -130,8 +172,23 @@ export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardPro
     }
   };
 
+  // Filter activities based on CPMI status
+  const getFilteredActivities = () => {
+    if (userRole === "cpmi" && cpmiData) {
+      if (cpmiData.status === "aktif") {
+        return recentActivities.filter(activity => activity.type === "absensi" || activity.type === "pelajaran");
+      } else if (cpmiData.status === "piket") {
+        return recentActivities.filter(activity => activity.type === "piket");
+      }
+      return recentActivities;
+    }
+    return recentActivities;
+  };
+
+  const filteredActivities = getFilteredActivities();
+
   return (
-    <MainLayout userRole={userRole} userName={userName}>
+    <MainLayout userRole={userRole} userName={userName} cpmiStatus={cpmiData?.status || null}>
       <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-gradient-hero rounded-lg p-6 text-white">
@@ -139,7 +196,10 @@ export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardPro
             {getGreeting()}, {userName}!
           </h1>
           <p className="text-white/90">
-            {userRole === "cpmi" && "Semangat belajar hari ini! Jangan lupa melakukan absensi."}
+            {userRole === "cpmi" && cpmiData && cpmiData.status === "aktif" && "Semangat belajar hari ini! Jangan lupa melakukan absensi."}
+            {userRole === "cpmi" && cpmiData && cpmiData.status === "piket" && "Hari ini Anda bertugas piket. Pastikan menjalankan tugas dengan baik!"}
+            {userRole === "cpmi" && cpmiData && cpmiData.status === "sudah_terbang" && "Selamat! Anda telah menyelesaikan program dan sudah terbang."}
+            {userRole === "cpmi" && !cpmiData && "Selamat datang di sistem CPMI!"}
             {userRole === "pengajar" && "Mari mulai mengajar dengan semangat hari ini!"}
             {userRole === "admin" && "Pantau aktivitas CPMI dan kelola sistem dengan efisien."}
             {userRole === "superadmin" && "Kelola seluruh sistem dan pastikan semua berjalan lancar."}
@@ -167,13 +227,13 @@ export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardPro
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Aktivitas Terbaru
+                {userRole === "cpmi" && cpmiData?.status === "piket" ? "Aktivitas Piket" : "Aktivitas Terbaru"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivities.map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors">
+                {filteredActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="text-xs">
                         {activity.user.split(' ').map(n => n[0]).join('')}
@@ -200,18 +260,18 @@ export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardPro
             </CardContent>
           </Card>
 
-          {/* Today's Schedule */}
+          {/* Today's Schedule or Piket Schedule */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                Jadwal Hari Ini
+                {userRole === "cpmi" && cpmiData?.status === "piket" ? "Jadwal Piket Hari Ini" : "Jadwal Hari Ini"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {todaySchedule.map((schedule) => (
-                  <div key={schedule.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                  <div key={schedule.id} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">
                     <div className="text-center min-w-0">
                       <p className="text-sm font-medium">{schedule.time}</p>
                     </div>
@@ -228,11 +288,20 @@ export function Dashboard({ userRole = "cpmi", userName = "User" }: DashboardPro
                 ))}
               </div>
               
-              {userRole === "cpmi" && (
+              {userRole === "cpmi" && cpmiData?.status === "aktif" && (
                 <div className="mt-4 pt-4 border-t">
                   <Button className="w-full" variant="default">
                     <MapPin className="h-4 w-4 mr-2" />
                     Lakukan Absensi Sekarang
+                  </Button>
+                </div>
+              )}
+
+              {userRole === "cpmi" && cpmiData?.status === "piket" && (
+                <div className="mt-4 pt-4 border-t">
+                  <Button className="w-full" variant="default">
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Lapor Tugas Piket
                   </Button>
                 </div>
               )}
